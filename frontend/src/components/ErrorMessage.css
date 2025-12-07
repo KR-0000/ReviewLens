@@ -1,0 +1,43 @@
+.error-container {
+  margin-bottom: 2rem;
+}
+
+.error-content {
+  background: #fee;
+  border: 1px solid #fcc;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: #c33;
+}
+
+.error-icon {
+  font-size: 1.5rem;
+}
+
+.error-message {
+  flex: 1;
+  font-weight: 500;
+}
+
+.error-dismiss {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #c33;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.error-dismiss:hover {
+  opacity: 0.7;
+}
+
