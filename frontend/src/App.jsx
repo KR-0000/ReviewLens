@@ -55,9 +55,6 @@ function App() {
         {insights && !loading && <ProductInsights insights={insights} />}
       </main>
 
-      <footer className="app-footer">
-        <p>Powered by NLP & Machine Learning</p>
-      </footer>
     </div>
   )
 }
