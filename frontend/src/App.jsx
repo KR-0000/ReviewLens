@@ -42,7 +42,6 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>ReviewLens</h1>
-        <p className="subtitle">AI-Powered Product Review Analysis</p>
       </header>
 
       <main className="app-main">
