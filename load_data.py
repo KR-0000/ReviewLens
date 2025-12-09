@@ -158,6 +158,176 @@ def insert_batch(cursor, batch):
             row['reviews_title'], row['reviews_username'], row['sourceURLs']
         ))
 
+def create_normalized_tables(conn):
+    cursor = conn.cursor()
+
+    # PRODUCTS
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS products (
+        product_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        brand TEXT,
+        manufacturer TEXT,
+        manufacturerNumber TEXT
+    );
+    """)
+
+    # USERS
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE
+    );
+    """)
+
+    # REVIEWS (normalized)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS reviews_normalized (
+        review_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER,
+        user_id INTEGER,
+        rating REAL,
+        text TEXT,
+        title TEXT,
+        date TEXT,
+        didPurchase TEXT,
+        numHelpful TEXT,
+        FOREIGN KEY (product_id) REFERENCES products(product_id),
+        FOREIGN KEY (user_id) REFERENCES users(user_id)
+    );
+    """)
+
+    # CATEGORIES
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS categories (
+        category_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category_name TEXT UNIQUE
+    );
+    """)
+
+    # PRODUCT ↔ CATEGORIES (Many-to-many)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS product_categories (
+        product_id INTEGER,
+        category_id INTEGER,
+        PRIMARY KEY (product_id, category_id),
+        FOREIGN KEY (product_id) REFERENCES products(product_id),
+        FOREIGN KEY (category_id) REFERENCES categories(category_id)
+    );
+    """)
+
+    # IMAGES
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS images (
+        image_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_id INTEGER,
+        url TEXT,
+        FOREIGN KEY (product_id) REFERENCES products(product_id)
+    );
+    """)
+
+    conn.commit()
+
+def normalize_data(db_path='reviews.db'):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    create_normalized_tables(conn)
+
+    print("Normalizing data...")
+
+    cursor.execute("SELECT * FROM reviews")
+    rows = cursor.fetchall()
+
+    total = len(rows)
+
+    for i, row in enumerate(rows):
+        (
+            id, dateAdded, dateUpdated, name, asins, brand, categories,
+            primaryCategories, imageURLs, keys, manufacturer,
+            manufacturerNumber, reviews_date, reviews_dateSeen,
+            reviews_didPurchase, reviews_doRecommend, reviews_id,
+            reviews_numHelpful, reviews_rating, reviews_sourceURLs,
+            reviews_text, reviews_title, reviews_username, sourceURLs,
+            sentiment_score, sentiment_label, processed
+        ) = row
+
+        # ---- PRODUCTS ----
+        cursor.execute("""
+            SELECT product_id FROM products WHERE name = ? AND brand = ?
+        """, (name, brand))
+        res = cursor.fetchone()
+
+        if res:
+            product_id = res[0]
+        else:
+            cursor.execute("""
+                INSERT INTO products (name, brand, manufacturer, manufacturerNumber)
+                VALUES (?, ?, ?, ?)
+            """, (name, brand, manufacturer, manufacturerNumber))
+            product_id = cursor.lastrowid
+
+        # ---- USERS ----
+        cursor.execute("SELECT user_id FROM users WHERE username = ?", (reviews_username,))
+        user_res = cursor.fetchone()
+
+        if user_res:
+            user_id = user_res[0]
+        else:
+            cursor.execute("INSERT INTO users (username) VALUES (?)", (reviews_username,))
+            user_id = cursor.lastrowid
+
+        # ---- REVIEWS ----
+        cursor.execute("""
+            INSERT INTO reviews_normalized
+            (product_id, user_id, rating, text, title, date, didPurchase, numHelpful)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            product_id, user_id, reviews_rating, reviews_text, reviews_title,
+            reviews_date, reviews_didPurchase, reviews_numHelpful
+        ))
+
+        # ---- CATEGORIES ----
+        if categories:
+            for cat in categories.split(','):
+                cat = cat.strip()
+                if not cat:
+                    continue
+
+                cursor.execute("SELECT category_id FROM categories WHERE category_name=?", (cat,))
+                c = cursor.fetchone()
+                
+                if c:
+                    category_id = c[0]
+                else:
+                    cursor.execute("INSERT INTO categories (category_name) VALUES (?)", (cat,))
+                    category_id = cursor.lastrowid
+
+                cursor.execute("""
+                    INSERT OR IGNORE INTO product_categories (product_id, category_id)
+                    VALUES (?, ?)
+                """, (product_id, category_id))
+
+        # ---- IMAGES ----
+        if imageURLs:
+            for url in imageURLs.split(','):
+                url = url.strip()
+                if url:
+                    cursor.execute(
+                        "INSERT INTO images (product_id, url) VALUES (?, ?)",
+                        (product_id, url)
+                    )
+
+        # progress
+        if i % 5000 == 0:
+            print(f"{i}/{total} normalized...")
+            conn.commit()
+
+    conn.commit()
+    conn.close()
+
+    print("Normalization complete!")
+
 
 if __name__ == '__main__':
     csv_path = 'data/Datafiniti_Amazon_Consumer_Reviews_of_Amazon_Products_May19.csv'
@@ -168,6 +338,10 @@ if __name__ == '__main__':
     print("=" * 60)
     
     load_csv_to_db(csv_path, db_path)
+
+    print("\nNow normalizing into new tables...")
+    normalize_data(db_path)
+
     
     print("\nData loading complete!")
 
