@@ -222,6 +222,7 @@ def create_normalized_tables(conn):
         image_id INTEGER PRIMARY KEY AUTOINCREMENT,
         product_id INTEGER,
         url TEXT,
+        UNIQUE(product_id, url),
         FOREIGN KEY (product_id) REFERENCES products(product_id)
     );
     """)
@@ -313,10 +314,11 @@ def normalize_data(db_path='reviews.db'):
             for url in imageURLs.split(','):
                 url = url.strip()
                 if url:
-                    cursor.execute(
-                        "INSERT INTO images (product_id, url) VALUES (?, ?)",
-                        (product_id, url)
-                    )
+                    cursor.execute("""
+                    INSERT OR IGNORE INTO images (product_id, url)
+                    VALUES (?, ?)
+                """, (product_id, url))
+
 
         # progress
         if i % 5000 == 0:
@@ -332,6 +334,10 @@ def normalize_data(db_path='reviews.db'):
 if __name__ == '__main__':
     csv_path = 'data/Datafiniti_Amazon_Consumer_Reviews_of_Amazon_Products_May19.csv'
     db_path = 'reviews.db'
+
+    # delete existing database if exists
+    if os.path.exists(db_path):
+        os.remove(db_path)
     
     print("=" * 60)
     print("Loading CSV data into SQLite database")
